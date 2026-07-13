@@ -65,16 +65,24 @@ export default function Summary() {
 
       const result = await summarizeMeetingAudio(file);
 
+      await supabase
+        .from('action_items')
+        .delete()
+        .eq('meeting_id', meetingId);
+
       const { data: s, error: se } = await supabase
         .from('summaries')
-        .insert({
-          meeting_id: meetingId,
-          attendees: result.attendees,
-          summary_text: result.summary_text,
-          key_points: result.key_points,
-          decisions: result.decisions,
-          raw_transcript: '',
-        })
+        .upsert(
+          {
+            meeting_id: meetingId,
+            attendees: result.attendees,
+            summary_text: result.summary_text,
+            key_points: result.key_points,
+            decisions: result.decisions,
+            raw_transcript: '',
+          },
+          { onConflict: 'meeting_id' }
+        )
         .select()
         .single();
 
