@@ -1,27 +1,27 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
+import { initZoom, getSignature, joinMeeting, startRecording, stopRecording, leaveMeeting } from '../lib/zoomClient';
 
 export default function Recorder() {
   const { meetingId } = useParams();
   const navigate = useNavigate();
   const [meeting, setMeeting] = useState(null);
-  const [recording, setRecording] = useState(false);
+  const [meetingNumber, setMeetingNumber] = useState('');
+  const [meetingPassword, setMeetingPassword] = useState('');
+  const [userName, setUserName] = useState('');
+  const [inMeeting, setInMeeting] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
-  const mediaRecorderRef = useRef(null);
-  const chunksRef = useRef([]);
+  const [initializing, setInitializing] = useState(false);
   const timerRef = useRef(null);
-  const streamRef = useRef(null);
+  const zoomRootRef = useRef(null);
 
   useEffect(() => {
     fetchMeeting();
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-      }
     };
   }, []);
 
@@ -45,51 +45,53 @@ export default function Recorder() {
     return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   };
 
-  const startRecording = async () => {
+  const handleJoin = async () => {
+    if (!meetingNumber.trim()) {
+      setError('Meeting ID is required');
+      return;
+    }
+    if (!userName.trim()) {
+      setError('Your name is required');
+      return;
+    }
+
+    setInitializing(true);
+    setError('');
+
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true,
+      await initZoom(zoomRootRef.current);
+
+      const { signature, sdkKey } = await getSignature(meetingNumber, 0);
+
+      await joinMeeting({
+        signature,
+        sdkKey,
+        meetingNumber,
+        userName,
+        password: meetingPassword,
       });
-      streamRef.current = stream;
 
-      stream.getVideoTracks().forEach((t) => t.stop());
-
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus',
-      });
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = () => handleUpload(new Blob(chunksRef.current, { type: 'audio/webm' }));
-
-      mediaRecorder.start();
-      setRecording(true);
+      setInMeeting(true);
       setElapsed(0);
       timerRef.current = setInterval(() => setElapsed((p) => p + 1), 1000);
+
+      startRecording((blob) => handleUpload(blob));
 
       await supabase
         .from('meetings')
         .update({ status: 'recording' })
         .eq('id', meetingId);
     } catch (err) {
-      setError('Could not start recording. Make sure you grant tab audio permission.');
+      setError('Could not join meeting: ' + (err.message || 'Unknown error'));
+      setInitializing(false);
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-    }
+  const handleLeave = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    setRecording(false);
+    stopRecording();
+    await leaveMeeting();
+    setInMeeting(false);
   };
 
   const handleUpload = async (blob) => {
@@ -123,43 +125,75 @@ export default function Recorder() {
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md text-center">
         <h1 className="text-xl font-bold text-gray-900 mb-1">{meeting?.title || 'Meeting'}</h1>
-        <p className="text-sm text-gray-500 mb-6">Recording</p>
+        <p className="text-sm text-gray-500 mb-6">
+          {inMeeting ? 'In Meeting' : 'Join to Record'}
+        </p>
 
         {error && (
           <div className="bg-red-50 text-red-700 text-sm rounded-lg p-3 mb-4">{error}</div>
         )}
 
-        <div className="mb-6">
-          {recording && (
+        {!inMeeting ? (
+          <div className="space-y-4">
+            <div>
+              <input
+                type="text"
+                placeholder="Zoom Meeting ID"
+                value={meetingNumber}
+                onChange={(e) => setMeetingNumber(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <input
+                type="text"
+                placeholder="Meeting Password (optional)"
+                value={meetingPassword}
+                onChange={(e) => setMeetingPassword(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <input
+                type="text"
+                placeholder="Your Name"
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <button
+              onClick={handleJoin}
+              disabled={initializing}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg px-4 py-2.5 text-sm disabled:opacity-50"
+            >
+              {initializing ? 'Joining...' : 'Join Meeting'}
+            </button>
+          </div>
+        ) : (
+          <div>
             <div className="flex items-center justify-center gap-2 mb-4">
               <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
               <span className="text-red-600 text-sm font-medium">Recording</span>
             </div>
-          )}
-          <div className="text-5xl font-mono text-gray-900 mb-6">{formatTime(elapsed)}</div>
-        </div>
+            <div className="text-5xl font-mono text-gray-900 mb-6">{formatTime(elapsed)}</div>
 
-        {uploading ? (
-          <div className="text-blue-600 text-sm">Uploading and processing...</div>
-        ) : !recording ? (
-          <button
-            onClick={startRecording}
-            className="bg-red-500 hover:bg-red-600 text-white font-medium rounded-full w-20 h-20 flex items-center justify-center mx-auto transition"
-          >
-            <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="8" />
-            </svg>
-          </button>
-        ) : (
-          <button
-            onClick={stopRecording}
-            className="bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-full w-20 h-20 flex items-center justify-center mx-auto transition"
-          >
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="6" y="6" width="12" height="12" rx="1" />
-            </svg>
-          </button>
+            {uploading ? (
+              <div className="text-blue-600 text-sm">Uploading and processing...</div>
+            ) : (
+              <button
+                onClick={handleLeave}
+                className="bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-full w-20 h-20 flex items-center justify-center mx-auto transition"
+              >
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="6" width="12" height="12" rx="1" />
+                </svg>
+              </button>
+            )}
+          </div>
         )}
+
+        <div ref={zoomRootRef} id="zoom-meeting" className={inMeeting ? 'mt-6' : 'hidden'} />
 
         <button
           onClick={() => navigate('/dashboard')}

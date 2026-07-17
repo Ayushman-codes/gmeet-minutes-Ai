@@ -1,4 +1,4 @@
-# GMeet Minutes AI — Build Context for AI Coding Agent
+# Zoom Minutes AI — Build Context for AI Coding Agent
 
 > Paste this entire file as the project brief/system context before asking an agent
 > (Claude Code, Cursor, Windsurf, v0, etc.) to scaffold or build this app. It is
@@ -8,30 +8,32 @@
 
 ## 1. Project Overview
 
-**Name:** GMeet Minutes AI
-**What it is:** A React web app that lets a host record the audio of a live Google
-Meet call, sends that audio to the Gemini Flash API for transcription +
+**Name:** Zoom Minutes AI
+**What it is:** A React web app that lets a user join a Zoom meeting, record the
+audio, sends that audio to the Gemini Flash API for transcription +
 summarization in one call, produces a structured Minutes of Meeting (MoM), and
-lets the host send it to participants via a Gmail compose redirect.
+lets the user send it to participants via a Gmail compose redirect.
 
-**Scope:** Single-user-per-meeting (the host). No real-time multi-user
+**Scope:** Single-user-per-meeting model. No real-time multi-user
 collaboration required. Built for an academic (BCA final-year) evaluation by a
 4-person team — prioritize a working core pipeline over exhaustive edge-case
 handling.
 
-**Non-goals (do not build unless explicitly asked):** multi-platform support
-(Zoom/Teams), speaker diarization, real-time live captioning, calendar
-integration, a custom backend server beyond Supabase Edge Functions.
+**Non-goals (do not build unless explicitly asked):** speaker diarization,
+real-time live captioning, calendar integration, a custom backend server beyond
+Supabase Edge Functions.
 
 ## 2. Tech Stack (exact)
 
 | Layer | Choice |
 |---|---|
-| Frontend | React 18 + Vite, Tailwind CSS |
+| Frontend | React 19 + Vite 8, Tailwind CSS 4 |
 | Routing | react-router-dom v6 |
 | Auth / DB / Storage | Supabase (`@supabase/supabase-js`) |
 | AI | Google Gen AI SDK (`@google/genai`) |
 | AI model | `gemini-3.1-flash-lite` (cost-efficient, documented direct-audio-to-text support) — use `gemini-3.5-flash` instead if higher summarization quality is needed. **Verify the current model string at https://ai.google.dev/gemini-api/docs/models before final submission** — Gemini model names rotate on a period of months and older names (e.g. `gemini-1.5-flash`, `gemini-2.0-flash`) are already shut down as of mid-2026. |
+| Video Conferencing | Zoom Meeting SDK for Web (`@zoom/meetingsdk`) |
+| Signature Backend | Supabase Edge Functions (Deno) |
 | Email handoff | Gmail compose URL redirect (`window.open`), no package needed |
 | Hosting | Vercel |
 
@@ -41,10 +43,14 @@ integration, a custom backend server beyond Supabase Edge Functions.
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 VITE_GEMINI_API_KEY=
+VITE_ZOOM_SDK_KEY=
 ```
 
-Note for the agent: this key will be used client-side. That's acceptable for an
-academic demo restricted to a personal/dev Google Cloud project, but flag it as
+Note: The Zoom SDK Secret is stored server-side in the Supabase Edge Function
+environment (`ZOOM_MEETING_SDK_SECRET`), never exposed to the client.
+
+Note for the agent: the Gemini key will be used client-side. That's acceptable for
+an academic demo restricted to a personal/dev Google Cloud project, but flag it as
 a known security trade-off — do not silently route it through a server without
 being asked, since that adds scope.
 
@@ -177,13 +183,11 @@ interface MomExtraction {
 ## 6. File / Folder Structure
 
 ```
-gmeet-minutes-ai/
+zoom-minutes/
   src/
     components/
-      RecorderControls.jsx
       SummaryEditor.jsx
       ActionItemList.jsx
-      MeetingCard.jsx
       SendViaGmailButton.jsx
     pages/
       Login.jsx
@@ -195,13 +199,16 @@ gmeet-minutes-ai/
       supabaseClient.js
       geminiClient.js       # wraps Gemini call + JSON parsing/validation
       gmailRedirect.js       # builds the compose URL
+      zoomClient.js          # Zoom Meeting SDK wrapper
     hooks/
-      useAudioRecorder.js    # getDisplayMedia + MediaRecorder wrapper
       useAuth.js
     App.jsx
     main.jsx
   supabase/
     schema.sql               # section 4 above
+    functions/
+      sign-zoom/
+        index.ts             # JWT signature generation for Zoom SDK
   .env.local
 ```
 
@@ -216,12 +223,14 @@ gmeet-minutes-ai/
 - Form: title (required), agenda notes (optional).
 - Inserts a `meetings` row with `status = 'draft'`, then navigates to `/recorder/:id`.
 
-**F3 — Audio capture**
-- Use `navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })`, discard the video track immediately, feed the audio track to `MediaRecorder`.
-- UI: Start / Stop button, live elapsed-time counter, a visible "Recording" indicator.
-- On Stop: upload the resulting blob to Supabase Storage, set `meetings.audio_url`, set `status = 'processing'`.
+**F3 — Zoom integration + audio capture**
+- User enters Zoom Meeting ID, Password (optional), and User Name.
+- App calls Supabase Edge Function to get a signed JWT for the Zoom Meeting SDK.
+- Zoom SDK joins the meeting as a participant (role=0).
+- Audio is captured via MediaRecorder during the meeting.
+- On leave: upload the resulting blob to Supabase Storage, set `meetings.audio_url`, set `status = 'processing'`.
 - Done when: a recorded file is present in Supabase Storage and linked to the meeting row.
-- Known limitation to document, not silently "fix": tab-audio sharing requires Chrome or Edge; other browsers may not expose the "share tab audio" checkbox.
+- Known limitation: Zoom Meeting SDK requires Chrome/Edge on desktop.
 
 **F4 — Gemini summarization**
 - On upload success, call Gemini Flash with the audio file + the prompt template in section 8.2.
@@ -307,6 +316,15 @@ export function openGmailCompose({ to, subject, body }) {
 }
 ```
 
+### 8.4 Zoom Meeting SDK signature (Supabase Edge Function)
+
+```ts
+// supabase/functions/sign-zoom/index.ts
+// Generates a JWT signature for the Zoom Meeting SDK
+// Requires ZOOM_SDK_KEY and ZOOM_MEETING_SDK_SECRET in Edge Function environment
+// Deploy with: supabase functions deploy sign-zoom
+```
+
 ## 9. Routes
 
 | Path | Component | Auth required |
@@ -322,24 +340,26 @@ export function openGmailCompose({ to, subject, body }) {
 1. Supabase project + run `schema.sql` + enable Google OAuth provider.
 2. `useAuth` hook + `Login.jsx` + route guarding.
 3. `Dashboard.jsx` + meeting CRUD (create/list).
-4. `useAudioRecorder` hook + `Recorder.jsx` + Supabase Storage upload.
-5. `geminiClient.js` + wire up the processing step after upload.
-6. `Summary.jsx` with `SummaryEditor` + `ActionItemList`, save-back-to-DB.
-7. `gmailRedirect.js` + `SendViaGmailButton`.
-8. `MeetingDetail.jsx` (read-only reuse of Summary).
-9. Empty/error/loading states across all screens; deploy to Vercel.
+4. Deploy `sign-zoom` Edge Function + set Zoom credentials.
+5. `zoomClient.js` + `Recorder.jsx` with Zoom SDK integration + Supabase Storage upload.
+6. `geminiClient.js` + wire up the processing step after upload.
+7. `Summary.jsx` with `SummaryEditor` + `ActionItemList`, save-back-to-DB.
+8. `gmailRedirect.js` + `SendViaGmailButton`.
+9. `MeetingDetail.jsx` (read-only reuse of Summary).
+10. Empty/error/loading states across all screens; deploy to Vercel.
 
 ## 11. Constraints / Non-Negotiables
 
-- No custom backend server — Supabase (Postgres + Auth + Storage + optional Edge Functions) is the entire backend.
+- No custom backend server — Supabase (Postgres + Auth + Storage + Edge Functions) is the entire backend.
 - No video is stored or processed, audio only.
 - Single-page app, client-rendered; no SSR requirement.
-- Target Chrome/Edge for the recording feature; do not spend effort on cross-browser tab-audio workarounds.
+- Target Chrome/Edge for the Zoom SDK; do not spend effort on cross-browser workarounds.
 - Keep the Gemini prompt strict-JSON and always parse defensively — never let a malformed AI response crash a screen.
 
 ## 12. Known Limitations (document these, don't attempt silent fixes)
 
-- Tab-audio capture only works in Chromium-based browsers.
+- Zoom Meeting SDK requires Chrome/Edge on desktop.
 - No cryptographic proof the Gmail email was actually sent — the app can only confirm the compose window opened.
 - Transcription accuracy drops with overlapping speakers or heavy background noise; no diarization in this scope.
 - Gemini model names change frequently — pin the exact string used and note the pin date in the README.
+- Zoom SDK signature requires a Supabase Edge Function deployment with the SDK Secret.

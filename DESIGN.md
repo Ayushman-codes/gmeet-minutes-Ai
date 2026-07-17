@@ -1,4 +1,4 @@
-# DESIGN.md — GMeet Minutes AI
+# DESIGN.md — Zoom Minutes AI
 
 ## UI / UX Design System
 
@@ -61,10 +61,12 @@
 
 #### Recorder
 - Centered card
-- Meeting title + "Recording" label
-- Large monospace timer (MM:SS)
-- Record button (red circle) / Stop button (gray square)
-- "Recording" indicator with pulse animation
+- Meeting title + status label
+- Zoom meeting join form: Meeting ID, Password, User Name
+- "Join Meeting" button
+- During meeting: elapsed timer (MM:SS), recording indicator with pulse
+- Leave meeting button (gray square)
+- Zoom SDK embedded meeting container
 
 #### Summary
 - Full-width header with meeting title

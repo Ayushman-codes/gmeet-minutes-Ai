@@ -1,4 +1,4 @@
-# PHASES.md — GMeet Minutes AI
+# PHASES.md — Zoom Minutes AI
 
 ## Build Phases
 
@@ -90,13 +90,28 @@
 - Failed processing state with retry button
 - Build passes clean
 
+### Phase 9 — Zoom Meeting SDK Integration
+**Status:** Done
+
+- Installed @zoom/meetingsdk dependency
+- Created zoomClient.js with Zoom SDK wrapper (init, join, leave, recording)
+- Created Supabase Edge Function sign-zoom for JWT signature generation
+- Rewrote Recorder.jsx to use Zoom SDK (join form, embedded meeting, audio capture)
+- Updated .env.local with VITE_ZOOM_SDK_KEY
+- Updated all markdown files (ARCHITECTURE, DESIGN, PRD, README, AGENT_CONTEXT, MEMORY, PHASES, RULES)
+- Updated branding from "GMeet Minutes AI" to "Zoom Minutes AI"
+
 ### Next Steps (Manual)
 
 1. Create Supabase project and run schema.sql
 2. Enable Google OAuth provider in Supabase
 3. Create `meeting-audio` storage bucket in Supabase
-4. Fill in .env.local with real credentials
-5. Test auth flow end-to-end
-6. Test recording in Chrome/Edge
-7. Verify Gemini model name at https://ai.google.dev/gemini-api/docs/models
-8. Deploy to Vercel
+4. Create Zoom Developer account and Meeting SDK App
+5. Get SDK Key and SDK Secret from Zoom Marketplace
+6. Deploy sign-zoom Edge Function: `supabase functions deploy sign-zoom`
+7. Set Zoom credentials in Edge Function environment
+8. Fill in .env.local with real credentials
+9. Test auth flow end-to-end
+10. Test Zoom meeting join and audio recording
+11. Verify Gemini model name at https://ai.google.dev/gemini-api/docs/models
+12. Deploy to Vercel

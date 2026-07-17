@@ -1,4 +1,4 @@
-# MEMORY.md — GMeet Minutes AI
+# MEMORY.md — Zoom Minutes AI
 
 ## Project Memory
 
@@ -15,6 +15,7 @@
 | 6 — Gmail | Done | 2026-07-13 | gmailRedirect.js, SendViaGmailButton |
 | 7 — Detail | Done | 2026-07-13 | MeetingDetail read-only page |
 | 8 — Polish | Done | 2026-07-13 | Error/loading states, clean build |
+| 9 — Zoom SDK | Done | 2026-07-14 | Zoom Meeting SDK integration, Edge Function for signature |
 
 ### Files Created
 
@@ -24,12 +25,13 @@ src/
     supabaseClient.js      — Supabase client init
     geminiClient.js        — Gemini Flash call + JSON parse
     gmailRedirect.js       — Gmail compose URL builder
+    zoomClient.js          — Zoom Meeting SDK wrapper
   hooks/
     useAuth.js             — Auth state + sign in/out methods
   pages/
     Login.jsx              — Email/password + Google OAuth
     Dashboard.jsx          — Meeting list + create form
-    Recorder.jsx           — Audio capture + upload
+    Recorder.jsx           — Zoom SDK join + audio capture + upload
     Summary.jsx            — Processing + review + edit
     MeetingDetail.jsx      — Read-only meeting view
   components/
@@ -41,6 +43,9 @@ src/
   index.css                — Tailwind import
 supabase/
   schema.sql               — Full DB schema + RLS + trigger
+  functions/
+    sign-zoom/
+      index.ts             — JWT signature generation for Zoom SDK
 ```
 
 ### Environment Variables
@@ -49,6 +54,13 @@ supabase/
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 VITE_GEMINI_API_KEY=
+VITE_ZOOM_SDK_KEY=
+```
+
+Edge Function environment:
+```
+ZOOM_SDK_KEY=
+ZOOM_MEETING_SDK_SECRET=
 ```
 
 ### Current Model Pin
@@ -64,3 +76,5 @@ VITE_GEMINI_API_KEY=
 3. No TypeScript — JSX only per AGENT_CONTEXT.md
 4. Supabase Storage bucket `meeting-audio` must be created manually
 5. Client-side Gemini API key — documented as known security trade-off
+6. Zoom SDK Secret stored server-side only (Edge Function) — never exposed to client
+7. Zoom SDK join as participant (role=0) — user provides Meeting ID + Password

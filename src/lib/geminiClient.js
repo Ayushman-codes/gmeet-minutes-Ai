@@ -4,20 +4,22 @@ const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
 const PROMPT = `You are given the audio recording of a meeting. Transcribe and summarize it.
 
-CRITICAL RULES:
-- ONLY include attendee names that are EXPLICITLY spoken/mentioned in the audio.
-- If you cannot clearly identify any names, return an empty array [] for attendees.
-- NEVER guess, infer, or make up names. Do not use placeholder names like "John", "Sarah", "Mark", "Emily".
+CRITICAL RULES — DO NOT BREAK THESE:
+- DO NOT generate, guess, infer, or fabricate any person names.
+- For "attendees": return [] (empty array). You MUST NOT output any names here. Even if you hear names, return [].
+- For "owner_name" in action items: return null. You MUST NOT output any names here.
+- Never use placeholder or example names like "John", "Sarah", "Mark", "Emily", "Speaker 1", "Participant A", etc.
 - Base ALL content (summary, key points, decisions, action items) strictly on what is actually said in the audio.
+- The summary must describe WHAT was discussed, not WHO said what.
 
 Return ONLY valid JSON (no markdown fences, no commentary) matching exactly this shape:
 {
-  "attendees": string[],
+  "attendees": [],
   "summary_text": string,
   "key_points": string[],
   "decisions": string[],
   "action_items": [
-    { "description": string, "owner_name": string | null, "due_date": string | null }
+    { "description": string, "owner_name": null, "due_date": string | null }
   ]
 }`;
 
