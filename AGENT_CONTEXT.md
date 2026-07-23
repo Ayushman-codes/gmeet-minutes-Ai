@@ -28,7 +28,7 @@ Supabase Edge Functions.
 | Layer | Choice |
 |---|---|
 | Frontend | React 19 + Vite 8, Tailwind CSS 4 |
-| Routing | react-router-dom v6 |
+| Routing | react-router-dom v7 |
 | Auth / DB / Storage | Supabase (`@supabase/supabase-js`) |
 | AI | Google Gen AI SDK (`@google/genai`) |
 | AI model | `gemini-3.1-flash-lite` (cost-efficient, documented direct-audio-to-text support) — use `gemini-3.5-flash` instead if higher summarization quality is needed. **Verify the current model string at https://ai.google.dev/gemini-api/docs/models before final submission** — Gemini model names rotate on a period of months and older names (e.g. `gemini-1.5-flash`, `gemini-2.0-flash`) are already shut down as of mid-2026. |
@@ -183,7 +183,7 @@ interface MomExtraction {
 ## 6. File / Folder Structure
 
 ```
-zoom-minutes/
+gmeet-minutes/
   src/
     components/
       SummaryEditor.jsx
@@ -272,23 +272,43 @@ import { GoogleGenAI } from '@google/genai';
 
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
-const PROMPT = `You are given the audio recording of a meeting.
+const PROMPT = `You are given the audio recording of a meeting. Transcribe and summarize it.
+
+CRITICAL RULES — DO NOT BREAK THESE:
+- DO NOT generate, guess, infer, or fabricate any person names.
+- For "attendees": return [] (empty array). You MUST NOT output any names here. Even if you hear names, return [].
+- For "owner_name" in action items: return null. You MUST NOT output any names here.
+- Never use placeholder or example names like "John", "Sarah", "Mark", "Emily", "Speaker 1", "Participant A", etc.
+- Base ALL content (summary, key points, decisions, action items) strictly on what is actually said in the audio.
+- The summary must describe WHAT was discussed, not WHO said what.
+
+EMPTY / NO CONTENT RULES:
+- If the audio is empty, silent, too short (under 5 seconds), contains no speech, or only has background noise/static, return this exact JSON:
+  { "attendees": [], "summary_text": "No meaningful audio content was captured in this recording.", "key_points": [], "decisions": [], "action_items": [] }
+- Do NOT fabricate a summary from silence, background noise, or unintelligible audio.
+- If you cannot clearly understand what is being said, return the empty result above.
+- Only summarize content you can clearly hear and understand.
+
 Return ONLY valid JSON (no markdown fences, no commentary) matching exactly this shape:
 {
-  "attendees": string[],       // names actually heard in the audio; empty array if none identifiable
-  "summary_text": string,      // 2-4 sentence plain-language summary
+  "attendees": [],
+  "summary_text": string,
   "key_points": string[],
   "decisions": string[],
   "action_items": [
-    { "description": string, "owner_name": string | null, "due_date": string | null }
+    { "description": string, "owner_name": null, "due_date": string | null }
   ]
 }`;
 
 export async function summarizeMeetingAudio(audioFile) {
   const uploaded = await ai.files.upload({ file: audioFile });
+
   const response = await ai.models.generateContent({
     model: 'gemini-3.1-flash-lite',
-    contents: [PROMPT, uploaded],
+    contents: [
+      { text: PROMPT },
+      { fileData: { fileUri: uploaded.uri, mimeType: uploaded.mimeType } },
+    ],
   });
 
   const cleaned = response.text.replace(/```json|```/g, '').trim();

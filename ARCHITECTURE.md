@@ -38,7 +38,7 @@
 | Layer | Choice |
 |-------|--------|
 | Frontend | React 19 + Vite 8, Tailwind CSS 4 |
-| Routing | react-router-dom v6 |
+| Routing | react-router-dom v7 |
 | Auth / DB / Storage | Supabase (@supabase/supabase-js) |
 | AI | Google Gen AI SDK (@google/genai) |
 | AI Model | gemini-3.1-flash-lite |

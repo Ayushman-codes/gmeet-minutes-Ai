@@ -34,7 +34,7 @@ A React web app that joins Zoom meetings, records audio, and generates structure
 
 ```bash
 git clone <repo-url>
-cd zoom-minutes
+cd gmeet-minutes
 npm install
 ```
 
@@ -110,7 +110,7 @@ npm run dev
 ## Project Structure
 
 ```
-zoom-minutes/
+gmeet-minutes/
   src/
     components/
       SummaryEditor.jsx

@@ -15,6 +15,7 @@ export default function Recorder() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [initializing, setInitializing] = useState(false);
+  const [recordingStatus, setRecordingStatus] = useState('idle');
   const timerRef = useRef(null);
   const zoomRootRef = useRef(null);
 
@@ -60,30 +61,30 @@ export default function Recorder() {
 
     try {
       await initZoom(zoomRootRef.current);
-
       const { signature, sdkKey } = await getSignature(meetingNumber, 0);
-
-      await joinMeeting({
-        signature,
-        sdkKey,
-        meetingNumber,
-        userName,
-        password: meetingPassword,
-      });
+      await joinMeeting({ signature, sdkKey, meetingNumber, userName, password: meetingPassword });
 
       setInMeeting(true);
       setElapsed(0);
-      timerRef.current = setInterval(() => setElapsed((p) => p + 1), 1000);
+      setInitializing(false);
+      setRecordingStatus('waiting');
 
-      startRecording((blob) => handleUpload(blob));
-
-      await supabase
-        .from('meetings')
-        .update({ status: 'recording' })
-        .eq('id', meetingId);
+      startRecording(
+        (blob) => handleUpload(blob),
+        () => {
+          setRecordingStatus('recording');
+          timerRef.current = setInterval(() => setElapsed((p) => p + 1), 1000);
+          supabase.from('meetings').update({ status: 'recording' }).eq('id', meetingId);
+        }
+      ).catch((recErr) => {
+        console.warn('Recording failed:', recErr);
+        setRecordingStatus('failed');
+        setError('Recording could not start: ' + recErr.message + '. You are still in the meeting.');
+      });
     } catch (err) {
       setError('Could not join meeting: ' + (err.message || 'Unknown error'));
       setInitializing(false);
+      setInMeeting(false);
     }
   };
 
@@ -123,7 +124,7 @@ export default function Recorder() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
-      <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md text-center">
+      <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-4xl text-center">
         <h1 className="text-xl font-bold text-gray-900 mb-1">{meeting?.title || 'Meeting'}</h1>
         <p className="text-sm text-gray-500 mb-6">
           {inMeeting ? 'In Meeting' : 'Join to Record'}
@@ -135,6 +136,9 @@ export default function Recorder() {
 
         {!inMeeting ? (
           <div className="space-y-4">
+            <div className="bg-blue-50 text-blue-700 text-xs rounded-lg p-3 text-left">
+              When you click Join Meeting, a browser dialog will appear. You <strong>must</strong> select this tab and enable <strong>"Share tab audio"</strong> for the recording to work.
+            </div>
             <div>
               <input
                 type="text"
@@ -172,10 +176,22 @@ export default function Recorder() {
           </div>
         ) : (
           <div>
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-red-600 text-sm font-medium">Recording</span>
-            </div>
+            {recordingStatus === 'waiting' && (
+              <div className="bg-yellow-50 text-yellow-700 text-sm rounded-lg p-3 mb-4">
+                Select this tab and enable <strong>"Share tab audio"</strong> in the browser dialog, then click Share.
+              </div>
+            )}
+            {recordingStatus === 'recording' && (
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                <span className="text-red-600 text-sm font-medium">Recording</span>
+              </div>
+            )}
+            {recordingStatus === 'failed' && (
+              <div className="bg-yellow-50 text-yellow-700 text-sm rounded-lg p-3 mb-4">
+                Recording unavailable. You are in the meeting but audio is not being captured.
+              </div>
+            )}
             <div className="text-5xl font-mono text-gray-900 mb-6">{formatTime(elapsed)}</div>
 
             {uploading ? (
@@ -193,7 +209,7 @@ export default function Recorder() {
           </div>
         )}
 
-        <div ref={zoomRootRef} id="zoom-meeting" className={inMeeting ? 'mt-6' : 'hidden'} />
+        <div ref={zoomRootRef} id="zoom-meeting" className={inMeeting ? 'mt-6 w-full h-[500px]' : 'hidden'} />
 
         <button
           onClick={() => navigate('/dashboard')}

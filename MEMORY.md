@@ -7,7 +7,7 @@
 | Phase | Status | Date | Notes |
 |-------|--------|------|-------|
 | 0 — Init | Done | 2026-07-13 | Vite scaffold, Tailwind, deps installed |
-| 1 — Auth | Done | 2026-07-13 | useAuth hook, Login page, route guarding |
+| 1 — Auth | Done | 2026-07-13 | useAuth hook, Login page, route guarding, react-router-dom v7 |
 | 2 — Dashboard | Done | 2026-07-13 | Meeting list, create meeting form |
 | 3 — Recorder | Done | 2026-07-13 | getDisplayMedia, MediaRecorder, Storage upload |
 | 4 — Gemini | Done | 2026-07-13 | geminiClient.js, processing pipeline |
@@ -16,6 +16,7 @@
 | 7 — Detail | Done | 2026-07-13 | MeetingDetail read-only page |
 | 8 — Polish | Done | 2026-07-13 | Error/loading states, clean build |
 | 9 — Zoom SDK | Done | 2026-07-14 | Zoom Meeting SDK integration, Edge Function for signature |
+| 10 — Fixes | Done | 2026-07-23 | Gemini anti-hallucination prompt, zoomClient leave error handling |
 
 ### Files Created
 
@@ -78,3 +79,5 @@ ZOOM_MEETING_SDK_SECRET=
 5. Client-side Gemini API key — documented as known security trade-off
 6. Zoom SDK Secret stored server-side only (Edge Function) — never exposed to client
 7. Zoom SDK join as participant (role=0) — user provides Meeting ID + Password
+8. react-router-dom v7 — latest major version
+9. Gemini anti-hallucination rules — return empty result for silent/noise-only audio

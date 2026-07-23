@@ -12,6 +12,13 @@ CRITICAL RULES — DO NOT BREAK THESE:
 - Base ALL content (summary, key points, decisions, action items) strictly on what is actually said in the audio.
 - The summary must describe WHAT was discussed, not WHO said what.
 
+EMPTY / NO CONTENT RULES:
+- If the audio is empty, silent, too short (under 5 seconds), contains no speech, or only has background noise/static, return this exact JSON:
+  { "attendees": [], "summary_text": "No meaningful audio content was captured in this recording.", "key_points": [], "decisions": [], "action_items": [] }
+- Do NOT fabricate a summary from silence, background noise, or unintelligible audio.
+- If you cannot clearly understand what is being said, return the empty result above.
+- Only summarize content you can clearly hear and understand.
+
 Return ONLY valid JSON (no markdown fences, no commentary) matching exactly this shape:
 {
   "attendees": [],
